@@ -1,6 +1,6 @@
 services:
   web:
-    image: ${{ secrets.DOCKERHUB_USERNAME }}/online-school:latest   # образ из CI
+    image: "${IMAGE}"
     ports:
       - "8000:8000"
     environment:
