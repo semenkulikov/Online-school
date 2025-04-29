@@ -2,24 +2,60 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches:
-      - main
-
-env:
-  IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/online-school:latest
+    branches: [ main ]
 
 jobs:
   build-test:
     runs-on: ubuntu-latest
+
+    services:
+      db:
+        image: postgres:15
+        env:
+          POSTGRES_DB: ${{ secrets.DB_NAME }}
+          POSTGRES_USER: ${{ secrets.DB_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_NAME: ${{ secrets.DB_NAME }}
+      DB_USER: ${{ secrets.DB_USER }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+      DEBUG_MODE: ${{ secrets.DEBUG_MODE }}
+      ALLOWED_HOSTS: ${{ secrets.ALLOWED_HOSTS }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.13'
+      - name: Create .env file
+        run: |
+          cat <<EOF > .env
+          DJANGO_SECRET_KEY=${{ secrets.DJANGO_SECRET_KEY }}
+          DEBUG_MODE=${{ secrets.DEBUG_MODE }}
+          DB_NAME=${{ secrets.DB_NAME }}
+          DB_USER=${{ secrets.DB_USER }}
+          DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+          DB_HOST=localhost
+          DB_PORT=5432
+          ALLOWED_HOSTS=${{ secrets.ALLOWED_HOSTS }}
+          EOF
       - name: Install dependencies
         run: pip install -r requirements.txt
+      - name: Wait for Postgres
+        run: |
+          until pg_isready -h localhost -p 5432; do
+            echo "Waiting for Postgres..."
+            sleep 1
+          done
       - name: Run migrations
         run: python manage.py migrate
       - name: Run tests
@@ -29,39 +65,28 @@ jobs:
     needs: build-test
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3                             # подготовка QEMU для multi-arch
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3                           # Buildx для продвинутой сборки образов
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3                                  # логин в DockerHub
+      - uses: actions/checkout@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build and push image
-        uses: docker/build-push-action@v6                             # сборка и пуш образа
+      - uses: docker/build-push-action@v6
         with:
           push: true
-          tags: ${{ env.IMAGE }}
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/online-school:latest
 
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.2.2                              # SSH-деплой
+      - uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
-          port: 22
           script: |
             cd /home/${{ secrets.SERVER_USER }}/online-school
-            docker pull ${{ env.IMAGE }}
-            docker-compose down
-            docker-compose up -d --build
-            docker system prune -f
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/online-school:latest
+            docker compose down
+            docker compose up -d --build
