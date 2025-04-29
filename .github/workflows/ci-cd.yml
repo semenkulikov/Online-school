@@ -34,7 +34,7 @@ jobs:
       DB_NAME: ${{ secrets.DB_NAME }}
       DB_USER: ${{ secrets.DB_USER }}
       DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+      DJANGO_SECRET_KEY: $${{ secrets.DJANGO_SECRET_KEY }}
       DEBUG_MODE: ${{ secrets.DEBUG_MODE }}
       ALLOWED_HOSTS: ${{ secrets.ALLOWED_HOSTS }}
       LANGUAGE_CODE: ${{ secrets.LANGUAGE_CODE }}
@@ -47,7 +47,7 @@ jobs:
       - name: Create .env file
         run: |
           cat <<EOF > .env
-          DJANGO_SECRET_KEY=${{ secrets.DJANGO_SECRET_KEY }}
+          DJANGO_SECRET_KEY=$${{ secrets.DJANGO_SECRET_KEY }}
           DEBUG_MODE=${{ secrets.DEBUG_MODE }}
           DB_NAME=${{ secrets.DB_NAME }}
           DB_USER=${{ secrets.DB_USER }}

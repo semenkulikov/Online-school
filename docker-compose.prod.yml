@@ -4,7 +4,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      DJANGO_SECRET_KEY: $${DJANGO_SECRET_KEY}
       DEBUG_MODE: ${DEBUG_MODE}
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT}
