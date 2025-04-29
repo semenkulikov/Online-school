@@ -114,7 +114,7 @@ jobs:
           script: |
             cd /home/${{ secrets.SERVER_USER }}/online-school
             docker pull ${{ env.IMAGE }}
-            docker compose down
-            docker compose up -d --build
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml down
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
             docker compose exec web python manage.py makemigrations
             docker compose exec web python manage.py migrate
