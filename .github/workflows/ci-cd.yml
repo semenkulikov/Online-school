@@ -33,6 +33,7 @@ jobs:
       DEBUG_MODE: ${{ secrets.DEBUG_MODE }}
       ALLOWED_HOSTS: ${{ secrets.ALLOWED_HOSTS }}
       LANGUAGE_CODE: ${{ secrets.LANGUAGE_CODE }}
+      IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/online-school:latest
 
     steps:
       - name: Checkout code
