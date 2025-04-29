@@ -2,7 +2,12 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
+
+# ← Глобальные переменные доступны во всех jobs
+env:
+  IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/online-school:latest
 
 jobs:
   build-test:
@@ -15,8 +20,6 @@ jobs:
           POSTGRES_DB: ${{ secrets.DB_NAME }}
           POSTGRES_USER: ${{ secrets.DB_USER }}
           POSTGRES_PASSWORD: ${{ secrets.DB_PASSWORD }}
-        ports:
-          - 5432:5432
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -32,12 +35,12 @@ jobs:
       DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
       DEBUG_MODE: ${{ secrets.DEBUG_MODE }}
       ALLOWED_HOSTS: ${{ secrets.ALLOWED_HOSTS }}
-      LANGUAGE_CODE: ${{ secrets.LANGUAGE_CODE }}
-      IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/online-school:latest
+      LANGUAGE_CODE: ru
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+
       - name: Create .env file
         run: |
           cat <<EOF > .env
@@ -49,26 +52,32 @@ jobs:
           DB_HOST=${{ secrets.DB_HOST }}
           DB_PORT=${{ secrets.DB_PORT }}
           ALLOWED_HOSTS=${{ secrets.ALLOWED_HOSTS }}
-          LANGUAGE_CODE=${{ secrets.LANGUAGE_CODE }}
-          EOF
+          LANGUAGE_CODE=ru
+          EOF                                                            :contentReference[oaicite:2]{index=2}
+
       - name: Install dependencies
         run: pip install -r requirements.txt
+
       - name: Wait for Postgres
         run: |
           until pg_isready -h localhost -p 5432; do
             echo "Waiting for Postgres..."
             sleep 1
           done
+
       - name: Run migrations
         run: python manage.py migrate
+
       - name: Run tests
         run: python manage.py test
 
   build-and-push:
     needs: build-test
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
@@ -85,21 +94,22 @@ jobs:
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
-          context: .
+          context: .                                             # ← важнейший флаг!
           push: true
-          tags: ${{ env.IMAGE }}
+          tags: ${{ env.IMAGE }}                                # ← здесь генерируется --tag
 
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
-      - uses: appleboy/ssh-action@v1.2.2
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
             cd /home/${{ secrets.SERVER_USER }}/online-school
-            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/online-school:latest
+            docker pull ${{ env.IMAGE }}
             docker compose down
             docker compose up -d --build
