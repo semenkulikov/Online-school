@@ -34,7 +34,7 @@ jobs:
       DB_NAME: ${{ secrets.DB_NAME }}
       DB_USER: ${{ secrets.DB_USER }}
       DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-      DJANGO_SECRET_KEY: $${{ secrets.DJANGO_SECRET_KEY }}
+      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
       DEBUG_MODE: ${{ secrets.DEBUG_MODE }}
       ALLOWED_HOSTS: ${{ secrets.ALLOWED_HOSTS }}
       LANGUAGE_CODE: ${{ secrets.LANGUAGE_CODE }}
@@ -115,6 +115,6 @@ jobs:
             cd /home/${{ secrets.SERVER_USER }}/online-school
             docker pull ${{ env.IMAGE }}
             docker compose -f docker-compose.yml -f docker-compose.prod.yml down
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
             docker compose exec web python manage.py makemigrations
             docker compose exec web python manage.py migrate
