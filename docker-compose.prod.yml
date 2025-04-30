@@ -1,6 +1,8 @@
 services:
   web:
     image: "${IMAGE}"
+    build: false
+    volumes: []
     command: gunicorn Online_school.wsgi:application --bind 0.0.0.0:8000
     ports:
       - "8000:8000"
