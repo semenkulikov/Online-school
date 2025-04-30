@@ -24,7 +24,7 @@ class Course(models.Model):
     session = models.ForeignKey(Session, on_delete=models.CASCADE)
 
     def __str__(self):
-        return f"{self.title} (сессия {self.session_number})"
+        return f"{self.title} (сессия {self.session.session_number})"
     
 class Enrollment(models.Model):
     """ Запись о зачислении студента на курс/сессию """
