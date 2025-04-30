@@ -1,6 +1,7 @@
 services:
   web:
     image: "${IMAGE}"
+    command: gunicorn Online_school.wsgi:application --bind 0.0.0.0:8000
     ports:
       - "8000:8000"
     environment:
@@ -27,3 +28,11 @@ services:
 
 volumes:
   pgdata:
+networks:
+  default:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.30.0.0/16
+          gateway: 172.30.0.1
