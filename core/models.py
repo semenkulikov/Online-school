@@ -11,6 +11,9 @@ class Session(models.Model):
     
     session_number = models.PositiveSmallIntegerField("Номер сессии")
 
+    def __str__(self):
+        return f"Сессия №{self.session_number}"
+
 class Student(models.Model):
     """ Модель для студента """
 
@@ -46,7 +49,7 @@ class Course(models.Model):
     session = models.ForeignKey(Session, on_delete=models.CASCADE, related_name="courses")
 
     def __str__(self):
-        return f"{self.title} (сессия {self.session.session_number})"
+        return f"Курс: {self.title} (сессия {self.session.session_number})"
     
 class Enrollment(models.Model):
     """ Запись о зачислении студента на курс/сессию """
@@ -70,6 +73,9 @@ class Enrollment(models.Model):
     status = models.CharField(choices=Status.choices, 
                               default=Status.PLANNED)
 
+    def __str__(self):
+        return f"Запись о зачислении для {self.student.full_name} (курс {self.course.title})"
+
 class Attendance(models.Model):
     """ Посещаемость: присутствие/отсутствие студента на конкретной сессии. """
 
@@ -81,6 +87,9 @@ class Attendance(models.Model):
     session = models.ForeignKey(Session, on_delete=models.CASCADE)
     present = models.BooleanField()  # Был ли студент на данной сессии
 
+    def __str__(self):
+        return f"Посещаемость для {self.enrollment.student.full_name} (сессия №{self.session.session_number})"
+
 class AssessmentType(models.Model):
     """ Тип зачета (Контрольная, чтение книг) """
 
@@ -90,6 +99,9 @@ class AssessmentType(models.Model):
         ordering = ["name"]
 
     name = models.CharField(max_length=100)
+
+    def __str__(self):
+        return f"{self.name}"
 
 class Assessment(models.Model):
     """ 
@@ -108,6 +120,9 @@ class Assessment(models.Model):
     date = models.DateField()
     certificate_issued = models.BooleanField(default=False)
 
+    def __str__(self):
+        return f"Оценка {self.score} для студента {self.enrollment.student.full_name}"
+
 class Certificate(models.Model):
     """ 
     Сведения о выдаче свидетельства: 
@@ -122,6 +137,9 @@ class Certificate(models.Model):
     assessment = models.OneToOneField(Assessment, on_delete=models.CASCADE, related_name="certificate")
     issued_on = models.DateField()
     file = models.FileField(upload_to='certificates/', blank=True, null=True)
+
+    def __str__(self):
+        return f"Сертификат об окончании курса {self.assessment.enrollment.course.title}, оценка {self.assessment.score}"
 
 class Statistic(models.Model):
     """ 
@@ -139,5 +157,3 @@ class Statistic(models.Model):
     uncertified = models.IntegerField()
     sessions_missed = models.IntegerField()
     sessions_late = models.IntegerField()
-    
-
