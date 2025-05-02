@@ -9,6 +9,21 @@ from .models import (Session,
                      Certificate,
                      )
 
+class AttendanceInline(admin.TabularInline):
+    """ Inline класс для записей о зачислении """
+    model = Attendance
+    extra = 0
+
+class AssessmentInline(admin.TabularInline):
+    """ Inline класс для оценок """
+    model = Assessment
+    extra = 0
+
+class EnrollmentInline(admin.TabularInline):
+    """ Inline класс для записей о зачислении """
+    model = Enrollment
+    extra = 0
+
 @admin.register(Session)
 class SessionAdmin(admin.ModelAdmin):
     """ Класс для отображения в админке модели Session """
@@ -25,6 +40,7 @@ class StudentAdmin(admin.ModelAdmin):
                     )
     search_fields = ('full_name',
                      'email')
+    inlines = [EnrollmentInline]
 
 @admin.register(Course)
 class CourseAdmin(admin.ModelAdmin):
@@ -44,6 +60,8 @@ class EnrollmentAdmin(admin.ModelAdmin):
         'status',
         'enrolled_on')
     list_filter = ('status',)
+    inlines = [AttendanceInline, AssessmentInline]
+
 
 @admin.register(Attendance)
 class AttendanceAdmin(admin.ModelAdmin):
