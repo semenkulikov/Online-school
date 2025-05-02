@@ -43,7 +43,7 @@ class Course(models.Model):
     
     title = models.CharField("Название предмета", max_length=200)
     description = models.TextField("Описание предмета", blank=True)
-    session = models.ForeignKey(Session, on_delete=models.CASCADE)
+    session = models.ForeignKey(Session, on_delete=models.CASCADE, related_name="courses")
 
     def __str__(self):
         return f"{self.title} (сессия {self.session.session_number})"
@@ -64,9 +64,9 @@ class Enrollment(models.Model):
         IN_PROGRESS = "in_progress", "Учится"
         COMPLETED = "completed", "Закончил"
     
-    student = models.ForeignKey(Student, on_delete=models.CASCADE)
-    course = models.ForeignKey(Course, on_delete=models.CASCADE)
-    enrolled_on = models.DateField(auto_now_add=True)
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="enrollments")
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="enrollments")
+    enrolled_on = models.DateField()
     status = models.CharField(choices=Status.choices, 
                               default=Status.PLANNED)
 
@@ -77,7 +77,7 @@ class Attendance(models.Model):
         verbose_name = "Посещаемость"
         verbose_name_plural = "Записи о посещаемости"
 
-    enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE)
+    enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE, related_name="attendances")
     session = models.ForeignKey(Session, on_delete=models.CASCADE)
     present = models.BooleanField()  # Был ли студент на данной сессии
 
@@ -102,8 +102,8 @@ class Assessment(models.Model):
         verbose_name_plural = "Оценки"
         ordering = ["-date"]
     
-    enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE)
-    type = models.ForeignKey(AssessmentType, on_delete=models.CASCADE)
+    enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE, related_name="assessments")
+    type = models.ForeignKey(AssessmentType, on_delete=models.CASCADE, related_name="assessments")
     score = models.DecimalField(max_digits=5, decimal_places=2)
     date = models.DateField()
     certificate_issued = models.BooleanField(default=False)
@@ -119,9 +119,9 @@ class Certificate(models.Model):
         verbose_name_plural = "Сертификаты"
         ordering = ["-issued_on"]
     
-    assessment = models.OneToOneField(Assessment, on_delete=models.CASCADE)
+    assessment = models.OneToOneField(Assessment, on_delete=models.CASCADE, related_name="certificate")
     issued_on = models.DateField()
-    file = models.FileField(upload_to='certificates/')
+    file = models.FileField(upload_to='certificates/', blank=True, null=True)
 
 class Statistic(models.Model):
     """ 
@@ -133,7 +133,7 @@ class Statistic(models.Model):
         verbose_name = "Статистика"
         verbose_name_plural = "Статистика"
     
-    student = models.OneToOneField(Student, on_delete=models.CASCADE)
+    student = models.OneToOneField(Student, on_delete=models.CASCADE, related_name="statistic")
     total_courses = models.IntegerField()
     certified = models.IntegerField()
     uncertified = models.IntegerField()
