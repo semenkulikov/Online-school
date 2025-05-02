@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 import os
 from pathlib import Path
 from dotenv import find_dotenv, load_dotenv
+import logging
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -19,7 +20,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 if find_dotenv(BASE_DIR / '.env'):
     load_dotenv()
 else:
-    exit("Не найден файл конфигурации!")
+    logging.error("Не найден файл конфигурации!")
 
 
 # Quick-start development settings - unsuitable for production
