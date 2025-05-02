@@ -41,6 +41,7 @@ class StudentAdmin(admin.ModelAdmin):
     search_fields = ('full_name',
                      'email')
     inlines = [EnrollmentInline]
+    list_per_page = 20
 
 @admin.register(Course)
 class CourseAdmin(admin.ModelAdmin):
@@ -60,7 +61,9 @@ class EnrollmentAdmin(admin.ModelAdmin):
         'status',
         'enrolled_on')
     list_filter = ('status',)
+    date_hierarchy = "enrolled_on"
     inlines = [AttendanceInline, AssessmentInline]
+    list_per_page = 20
 
 
 @admin.register(Attendance)
@@ -71,6 +74,7 @@ class AttendanceAdmin(admin.ModelAdmin):
         "session",
         "present",
     )
+    list_filter = ("present",)
 
 @admin.register(AssessmentType)
 class AssessmentTypeAdmin(admin.ModelAdmin):
@@ -94,6 +98,5 @@ class CertificateAdmin(admin.ModelAdmin):
     list_display = (
         "assessment",
         "issued_on",
-        "file",
     )
 
