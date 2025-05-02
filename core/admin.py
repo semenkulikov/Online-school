@@ -50,7 +50,8 @@ class CourseAdmin(admin.ModelAdmin):
                     'description',
                     'session',
                     )
-    list_filter = ('title', "session")
+    list_filter = ('title', 
+                   "session")
 
 @admin.register(Enrollment)
 class EnrollmentAdmin(admin.ModelAdmin):
