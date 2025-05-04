@@ -27,10 +27,10 @@ class Student(models.Model):
         SUSPENDED = "suspended", "Приостановлен"
     
     full_name = models.CharField("ФИО", max_length=200)
-    email = models.EmailField("E-mail", unique=True)
-    start_date = models.DateField("Дата начала обучения")
+    email = models.EmailField("E-mail", unique=True, null=True)
+    # start_date = models.DateField("Дата начала обучения")
     status = models.CharField("Статус", max_length=20, 
-                              choices=Status.choices, 
+                              choices=Status.choices,
                               default=Status.ACTIVE)
 
     def __str__(self):
