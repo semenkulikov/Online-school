@@ -1,6 +1,5 @@
 from django.db import models
-
-
+from django.utils.timezone import now
 class Session(models.Model):
     """ Модель для сессии """
 
@@ -28,7 +27,7 @@ class Student(models.Model):
     
     full_name = models.CharField("ФИО", max_length=200)
     email = models.EmailField("E-mail", unique=True, null=True)
-    # start_date = models.DateField("Дата начала обучения")
+    start_date = models.DateField("Дата начала обучения", null=True, default=now)
     status = models.CharField("Статус", max_length=20, 
                               choices=Status.choices,
                               default=Status.ACTIVE)
@@ -52,11 +51,11 @@ class Course(models.Model):
         return f"Курс: {self.title} (сессия {self.session.session_number})"
     
 class Enrollment(models.Model):
-    """ Запись о зачислении студента на курс/сессию """
+    """ Запись о зачислении студента на сессию """
 
     class Meta:
-        verbose_name = "Запись о зачислении студента на курс/сессию"
-        verbose_name_plural = "Записи о зачислении студента на курс/сессию"
+        verbose_name = "Запись о зачислении студента на сессию"
+        verbose_name_plural = "Записи о зачислении студента на сессию"
         ordering = ["-enrolled_on"]
         constraints = [
             models.UniqueConstraint(fields=["student", "course"], name="unique_enrollment")
@@ -68,13 +67,13 @@ class Enrollment(models.Model):
         COMPLETED = "completed", "Закончил"
     
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="enrollments")
-    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="enrollments")
-    enrolled_on = models.DateField()
+    session = models.ForeignKey(Session, on_delete=models.CASCADE, related_name="enrollments")
+    enrolled_on = models.DateField(null=True, default=now)
     status = models.CharField(choices=Status.choices, 
                               default=Status.PLANNED)
 
     def __str__(self):
-        return f"Запись о зачислении для {self.student.full_name} (курс {self.course.title})"
+        return f"Запись о зачислении для {self.student.full_name} (сессия {self.session.session_number})"
 
 class Attendance(models.Model):
     """ Посещаемость: присутствие/отсутствие студента на конкретной сессии. """
@@ -106,7 +105,7 @@ class AssessmentType(models.Model):
 class Assessment(models.Model):
     """ 
     Оценка по конкретному типу в рамках одной сессии: ссылка на Enrollment, 
-    AssessmentType, балл/результат, дата, выдан ли сертификат. 
+    курс, тип зачета, балл/результат, дата, выдан ли сертификат. 
     """
 
     class Meta:
@@ -115,9 +114,10 @@ class Assessment(models.Model):
         ordering = ["-date"]
     
     enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE, related_name="assessments")
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="assessments")
     type = models.ForeignKey(AssessmentType, on_delete=models.CASCADE, related_name="assessments")
-    score = models.DecimalField(max_digits=5, decimal_places=2)
-    date = models.DateField()
+    score = models.DecimalField(max_digits=100, decimal_places=1)
+    date = models.DateField(null=True, default=now)
     certificate_issued = models.BooleanField(default=False)
 
     def __str__(self):
@@ -133,13 +133,24 @@ class Certificate(models.Model):
         verbose_name = "Сертификат"
         verbose_name_plural = "Сертификаты"
         ordering = ["-issued_on"]
+
+    class Status(models.TextChoices):
+        UNREADY = "unready", "Не выдан"
+
+        CONDITIONALLY = "conditionally", "Условно-освидетельствовано (не все выполнено)"
+        CONTROL_RECEIVED = "control received", "Условно-освидетельствовано: поступила контрольная"
+
+        IN_PROGRESS = "in_progress", "Готовится"
+        COMPLETED = "completed", "Готов в электронной форме"
     
     assessment = models.OneToOneField(Assessment, on_delete=models.CASCADE, related_name="certificate")
-    issued_on = models.DateField()
+    issued_on = models.DateField(null=True, default=now)
     file = models.FileField(upload_to='certificates/', blank=True, null=True)
+    type = models.CharField(choices=Status.choices, 
+                              default=Status.UNREADY)
 
     def __str__(self):
-        return f"Сертификат об окончании курса {self.assessment.enrollment.course.title}, оценка {self.assessment.score}"
+        return f"Сертификат об окончании курса {self.assessment.course.title}, оценка {self.assessment.score}"
 
 class Statistic(models.Model):
     """ 
