@@ -1,5 +1,7 @@
 from django.db import models
 from django.utils.timezone import now
+
+
 class Session(models.Model):
     """ Модель для сессии """
 
