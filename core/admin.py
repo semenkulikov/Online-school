@@ -35,7 +35,6 @@ class StudentAdmin(admin.ModelAdmin):
     """ Класс для отображения в админке модели Student """
     list_display = ('full_name',
                     'email',
-                    'start_date',
                     'status',
                     )
     search_fields = ('full_name',
@@ -58,7 +57,7 @@ class EnrollmentAdmin(admin.ModelAdmin):
     """ Класс для отображения в админке модели Entrollment """
     list_display = (
         'student',
-        'course',
+        'session',
         'status',
         'enrolled_on')
     list_filter = ('status',)
@@ -87,6 +86,7 @@ class AssessmentAdmin(admin.ModelAdmin):
     """ Модель для отображения в админке модели Assessment """
     list_display = (
         "enrollment",
+        "course",
         "type",
         "score",
         "date",
@@ -99,5 +99,6 @@ class CertificateAdmin(admin.ModelAdmin):
     list_display = (
         "assessment",
         "issued_on",
+        "type"
     )
 
