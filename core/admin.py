@@ -35,7 +35,6 @@ class StudentAdmin(admin.ModelAdmin):
     """ Класс для отображения в админке модели Student """
     list_display = ('full_name',
                     'email',
-                    "start_date",
                     'status',
                     )
     search_fields = ('full_name',
