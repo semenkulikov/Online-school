@@ -2,6 +2,11 @@ from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
 from django.utils.safestring import mark_safe
+from django.core.cache import cache
+from django.db.models import Count, Avg, Prefetch, Q
+from django.db import connection
+import logging
+
 from .models import (Session,
                      Student, 
                      Course, 
@@ -13,6 +18,18 @@ from .models import (Session,
                      Statistic,
                      )
 
+logger = logging.getLogger('core')
+
+class OptimizedMixin:
+    """Миксин для оптимизации админки"""
+    
+    def get_queryset(self, request):
+        """Оптимизируем запросы для списка объектов"""
+        qs = super().get_queryset(request)
+        if hasattr(self, 'optimize_queryset'):
+            return self.optimize_queryset(qs)
+        return qs
+
 class AttendanceInline(admin.TabularInline):
     """ Inline класс для записей о посещаемости """
     model = Attendance
@@ -21,6 +38,8 @@ class AttendanceInline(admin.TabularInline):
     verbose_name = "Посещаемость"
     verbose_name_plural = "Записи о посещаемости"
     can_delete = False
+    show_change_link = False
+    max_num = 10  # Ограничиваем количество
     
     def has_add_permission(self, request, obj=None):
         return False
@@ -45,12 +64,14 @@ class CertificateInline(admin.TabularInline):
     verbose_name = "Сертификат"
     verbose_name_plural = "Сертификаты"
     can_delete = False
+    show_change_link = False
+    max_num = 15  # Ограничиваем количество
     
     def get_assessment_score(self, obj):
         if obj.assessment:
-            return f"{obj.assessment.score} ({obj.assessment.type.name})"
-        return "Нет связанной оценки"
-    get_assessment_score.short_description = 'Связанная оценка'
+            return f"{obj.assessment.score}"
+        return "—"
+    get_assessment_score.short_description = 'Балл'
     
     def has_add_permission(self, request, obj=None):
         return False
@@ -63,26 +84,38 @@ class EnrollmentInline(admin.TabularInline):
     verbose_name = "Зачисление"
     verbose_name_plural = "Записи о зачислении"
     can_delete = False
+    show_change_link = False
+    max_num = 10  # Ограничиваем количество
     
     def has_add_permission(self, request, obj=None):
         return False
 
 @admin.register(Session)
-class SessionAdmin(admin.ModelAdmin):
+class SessionAdmin(OptimizedMixin, admin.ModelAdmin):
     """ Класс для отображения в админке модели Session """
     list_display = ("session_number", "get_courses_count", "get_students_count")
     ordering = ("session_number",)
+    list_per_page = 50
+    
+    def optimize_queryset(self, qs):
+        return qs.prefetch_related('courses', 'enrollments__student')
     
     def get_courses_count(self, obj):
+        # Используем кэш или аннотацию
+        if hasattr(obj, 'courses_count'):
+            return obj.courses_count
         return obj.courses.count()
-    get_courses_count.short_description = 'Количество предметов'
+    get_courses_count.short_description = 'Предметов'
     
     def get_students_count(self, obj):
+        # Используем кэш или аннотацию
+        if hasattr(obj, 'students_count'):
+            return obj.students_count
         return obj.enrollments.values('student').distinct().count()
-    get_students_count.short_description = 'Количество студентов'
+    get_students_count.short_description = 'Студентов'
 
 @admin.register(Student)
-class StudentAdmin(admin.ModelAdmin):
+class StudentAdmin(OptimizedMixin, admin.ModelAdmin):
     """ Класс для отображения в админке модели Student """
     list_display = ('full_name',
                     'email',
@@ -92,182 +125,111 @@ class StudentAdmin(admin.ModelAdmin):
                     'get_total_score')
     search_fields = ('full_name', 'email')
     list_filter = ('status',)
-    inlines = [EnrollmentInline, CertificateInline]
-    list_per_page = 20
-    readonly_fields = ('get_detailed_progress', 'get_statistic_info')
+    inlines = []  # Убираю inline для ускорения загрузки
+    list_per_page = 20  # Еще меньше записей на странице
+    readonly_fields = ('get_quick_stats',)
     
     fieldsets = (
         ('Основная информация', {
             'fields': ('full_name', 'email', 'status')
         }),
-        ('Статистика обучения', {
-            'fields': ('get_statistic_info', 'get_detailed_progress'),
-            'classes': ('wide',)
+        ('Быстрая статистика', {
+            'fields': ('get_quick_stats',),
         }),
     )
     
+    def optimize_queryset(self, qs):
+        """Минимальная оптимизация для списка студентов"""
+        return qs.select_related('statistic').annotate(
+            sessions_count=Count('enrollments__session', distinct=True),
+            certificates_count=Count('certificates', distinct=True)
+        )
+    
     def get_sessions_count(self, obj):
+        if hasattr(obj, 'sessions_count'):
+            return obj.sessions_count
         return obj.enrollments.values('session').distinct().count()
     get_sessions_count.short_description = 'Сессий'
     
     def get_certificates_count(self, obj):
+        if hasattr(obj, 'certificates_count'):
+            return obj.certificates_count
         return obj.certificates.count()
     get_certificates_count.short_description = 'Сертификатов'
     
     def get_total_score(self, obj):
-        total_assessments = obj.enrollments.prefetch_related('assessments').all()
-        total_score = 0
-        count = 0
-        for enrollment in total_assessments:
-            for assessment in enrollment.assessments.filter(is_final_grade=True):
-                total_score += float(assessment.score)
-                count += 1
-        return f"{total_score/count:.1f}" if count > 0 else "Нет оценок"
+        """Быстрый подсчет среднего балла"""
+        cache_key = f"student_avg_score_{obj.id}"
+        avg_score = cache.get(cache_key)
+        
+        if avg_score is None:
+            # Самый быстрый запрос для среднего балла
+            scores = Assessment.objects.filter(
+                enrollment__student=obj, 
+                is_final_grade=True
+            ).values_list('score', flat=True)
+            
+            if scores:
+                avg_score = sum(float(score) for score in scores) / len(scores)
+                cache.set(cache_key, avg_score, 600)  # Кэш на 10 минут
+            else:
+                avg_score = 0
+        
+        return f"{avg_score:.1f}" if avg_score > 0 else "—"
     get_total_score.short_description = 'Средний балл'
     
-    def get_statistic_info(self, obj):
-        try:
-            stat = obj.statistic
-            return format_html(
-                """
-                <link rel="stylesheet" type="text/css" href="/static/core/admin/css/dark-theme.css">
-                <div class="student-statistics" style="background: var(--body-bg, #f8f9fa); 
-                           color: var(--body-fg, #333); 
-                           padding: 10px; 
-                           border-radius: 5px; 
-                           border: 1px solid var(--border-color, #ddd);">
-                    <strong>Персональная успеваемость:</strong><br>
-                    <span class="emoji">📚</span> Прослушано предметов: <strong style="color: var(--link-fg, #007bff);">{}</strong><br>
-                    <span class="emoji">✅</span> Освидетельствовано: <strong style="color: var(--success-fg, #28a745);">{}</strong><br>
-                    <span class="emoji">❌</span> Не освидетельствовано: <strong style="color: var(--error-fg, #dc3545);">{}</strong><br>
-                    <span class="emoji">📅</span> Посещено сессий: <strong style="color: var(--link-fg, #007bff);">{}</strong><br>
-                    <span class="emoji">⚠️</span> Пропущено сессий: <strong style="color: var(--warning-fg, #ffc107);">{}</strong><br>
-                    <span class="emoji">⏰</span> Опоздание на сессий: <strong style="color: var(--warning-fg, #ffc107);">{}</strong>
-                </div>
-                """,
-                stat.total_courses,
-                stat.certified,
-                stat.uncertified,
-                stat.sessions_attended,
-                stat.sessions_missed,
-                stat.sessions_late
-            )
-        except Statistic.DoesNotExist:
-            return "Статистика не рассчитана"
-    get_statistic_info.short_description = 'Статистика'
-    
-    def get_detailed_progress(self, obj):
-        # Группируем оценки по сессиям и курсам
-        enrollments = obj.enrollments.select_related('session').prefetch_related(
-            'assessments__course', 'assessments__type', 'attendances'
-        ).order_by('session__session_number')
+    def get_quick_stats(self, obj):
+        """Быстрая статистика без детализации"""
+        cache_key = f"student_quick_stats_{obj.id}"
+        html_content = cache.get(cache_key)
         
-        html_parts = []
+        if html_content is None:
+            try:
+                stat = obj.statistic
+                html_content = format_html(
+                    """
+                    <div style="background: var(--body-bg, #f8f9fa); border: 1px solid var(--border-color, #dee2e6); padding: 12px; border-radius: 6px; font-size: 14px; color: var(--body-fg, #333);">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
+                            <div>📚 Прослушано: <strong>{}</strong></div>
+                            <div>✅ Освидетельствовано: <strong style="color: #28a745;">{}</strong></div>
+                            <div>❌ Не освидетельствовано: <strong style="color: #dc3545;">{}</strong></div>
+                            <div>📅 Посещено сессий: <strong>{}</strong></div>
+                        </div>
+                        <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-color, #dee2e6); color: var(--body-quiet-color, #6c757d); text-align: center;">
+                            <a href="/admin/core/enrollment/?q={}" target="_blank" style="margin-right: 10px; color: var(--link-fg, #0066cc);">📝 Зачисления</a>
+                            <a href="/admin/core/certificate/?q={}" target="_blank" style="margin-right: 10px; color: var(--link-fg, #0066cc);">🏆 Сертификаты</a>
+                            <a href="/admin/core/assessment/?q={}" target="_blank" style="color: var(--link-fg, #0066cc);">📊 Оценки</a>
+                        </div>
+                    </div>
+                    """,
+                    stat.total_courses,
+                    stat.certified,
+                    stat.uncertified,
+                    stat.sessions_attended,
+                    obj.full_name,
+                    obj.full_name,
+                    obj.full_name
+                )
+                cache.set(cache_key, html_content, 900)  # Кэш на 15 минут
+            except Statistic.DoesNotExist:
+                html_content = format_html(
+                    """
+                    <div style='color: #6c757d; text-align: center; padding: 20px;'>
+                        Статистика не рассчитана<br>
+                        <a href="/admin/core/enrollment/?q={}" target="_blank" style="margin-right: 10px;">📝 Зачисления</a>
+                        <a href="/admin/core/certificate/?q={}" target="_blank">🏆 Сертификаты</a>
+                    </div>
+                    """,
+                    obj.id,
+                    obj.full_name
+                )
+                cache.set(cache_key, html_content, 300)
         
-        for enrollment in enrollments:
-            session = enrollment.session
-            # Проверяем посещаемость
-            attendance = enrollment.attendances.filter(session=session).first()
-            attendance_status = "✅ Присутствовал" if attendance and attendance.present else "❌ Отсутствовал"
-            
-            html_parts.append(f"""
-                <div class="session-progress" style="margin-bottom: 15px; 
-                           border: 1px solid var(--border-color, #ddd); 
-                           padding: 10px; 
-                           border-radius: 5px;
-                           background: var(--body-bg, #fff);
-                           color: var(--body-fg, #333);">
-                    <h4 style="margin: 0 0 10px 0; color: var(--body-fg, #333);">
-                        <span class="emoji">📚</span> Сессия №{session.session_number} - {attendance_status}
-                    </h4>
-            """)
-            
-            # Группируем оценки по курсам
-            courses_assessments = {}
-            for assessment in enrollment.assessments.all():
-                course = assessment.course
-                if course not in courses_assessments:
-                    courses_assessments[course] = []
-                courses_assessments[course].append(assessment)
-            
-            if courses_assessments:
-                for course, assessments in courses_assessments.items():
-                    html_parts.append(f"""
-                        <div style="margin-left: 20px; margin-bottom: 10px;">
-                            <strong style="color: var(--body-fg, #333);"><span class="emoji">📖</span> {course.title}:</strong><br>
-                    """)
-                    
-                    # Показываем все оценки по курсу
-                    final_grade = None
-                    regular_assessments = []
-                    
-                    for assessment in assessments:
-                        if assessment.is_final_grade:
-                            final_grade = assessment
-                        else:
-                            regular_assessments.append(assessment)
-                    
-                    # Обычные оценки
-                    if regular_assessments:
-                        html_parts.append('<div style="margin-left: 20px;">')
-                        for assessment in regular_assessments:
-                            html_parts.append(f"""
-                                <span style="color: var(--body-fg, #666);">• {assessment.type.name}: 
-                                <strong style="color: var(--link-fg, #007bff);">{assessment.score}</strong></span><br>
-                            """)
-                        html_parts.append('</div>')
-                    
-                    # Итоговая оценка
-                    if final_grade:
-                        html_parts.append(f"""
-                            <div style="margin-left: 20px; 
-                                       background: var(--success-bg, #e8f5e8); 
-                                       color: var(--success-fg, #155724);
-                                       padding: 5px; 
-                                       border-radius: 3px;
-                                       border: 1px solid var(--success-border, #c3e6cb);">
-                                <span class="emoji">🎯</span> <strong>Итоговая оценка: {final_grade.score}</strong>
-                            </div>
-                        """)
-                    
-                    # Информация о сертификате
-                    certificate = obj.certificates.filter(course=course).first()
-                    if certificate:
-                        # Цвета для темной и светлой темы
-                        status_colors = {
-                            'unready': {'bg': 'var(--warning-bg, #ffeaa7)', 'fg': 'var(--warning-fg, #856404)', 'border': 'var(--warning-border, #ffeaa7)'},
-                            'conditionally': {'bg': 'var(--error-bg, #f8d7da)', 'fg': 'var(--error-fg, #721c24)', 'border': 'var(--error-border, #f5c6cb)'},
-                            'control_received': {'bg': '#e1e5ff', 'fg': '#4c63d2', 'border': '#b8c5ff'},
-                            'in_progress': {'bg': '#d1ecf1', 'fg': '#0c5460', 'border': '#bee5eb'},
-                            'completed': {'bg': 'var(--success-bg, #d4edda)', 'fg': 'var(--success-fg, #155724)', 'border': 'var(--success-border, #c3e6cb)'}
-                        }
-                        colors = status_colors.get(certificate.type, {'bg': '#f8f9fa', 'fg': '#333', 'border': '#ddd'})
-                        html_parts.append(f"""
-                            <div class="certificate-status" style="margin-left: 20px; 
-                                       background: {colors['bg']}; 
-                                       color: {colors['fg']};
-                                       border: 1px solid {colors['border']};
-                                       padding: 5px; 
-                                       border-radius: 3px; 
-                                       margin-top: 5px;">
-                                <span class="emoji">🏆</span> Сертификат: <strong>{certificate.get_type_display()}</strong>
-                            </div>
-                        """)
-                    
-                    html_parts.append('</div>')
-            else:
-                html_parts.append('<div style="margin-left: 20px; color: var(--body-quiet-color, #666);">Нет оценок по данной сессии</div>')
-            
-            html_parts.append('</div>')
-        
-        if not html_parts:
-            return "Нет записей о зачислении"
-        
-        return mark_safe(''.join(html_parts))
-    get_detailed_progress.short_description = 'Детальный прогресс по сессиям'
+        return mark_safe(html_content)
+    get_quick_stats.short_description = 'Статистика и ссылки'
 
 @admin.register(Course)
-class CourseAdmin(admin.ModelAdmin):
+class CourseAdmin(OptimizedMixin, admin.ModelAdmin):
     """ Класс для отображения в админке модели Course """
     list_display = ('title',
                     'session',
@@ -278,21 +240,35 @@ class CourseAdmin(admin.ModelAdmin):
     list_filter = ('session',)
     search_fields = ('title',)
     ordering = ('session__session_number', 'title')
+    list_per_page = 50
+    
+    def optimize_queryset(self, qs):
+        return qs.select_related('session').prefetch_related('assessments__enrollment__student')
     
     def get_students_count(self, obj):
-        return obj.assessments.values('enrollment__student').distinct().count()
+        cache_key = f"course_students_{obj.id}"
+        count = cache.get(cache_key)
+        if count is None:
+            count = obj.assessments.values('enrollment__student').distinct().count()
+            cache.set(cache_key, count, 300)
+        return count
     get_students_count.short_description = 'Студентов'
     
     def get_avg_score(self, obj):
-        final_assessments = obj.assessments.filter(is_final_grade=True)
-        if final_assessments.exists():
-            avg = sum(float(a.score) for a in final_assessments) / final_assessments.count()
-            return f"{avg:.1f}"
-        return "Нет оценок"
+        cache_key = f"course_avg_{obj.id}"
+        avg = cache.get(cache_key)
+        if avg is None:
+            final_assessments = obj.assessments.filter(is_final_grade=True)
+            if final_assessments.exists():
+                avg = sum(float(a.score) for a in final_assessments) / final_assessments.count()
+                cache.set(cache_key, avg, 300)
+            else:
+                avg = 0
+        return f"{avg:.1f}" if avg > 0 else "—"
     get_avg_score.short_description = 'Средний балл'
 
 @admin.register(Enrollment)
-class EnrollmentAdmin(admin.ModelAdmin):
+class EnrollmentAdmin(OptimizedMixin, admin.ModelAdmin):
     """ Класс для отображения в админке модели Enrollment """
     list_display = (
         'get_student_name',
@@ -303,15 +279,17 @@ class EnrollmentAdmin(admin.ModelAdmin):
     list_filter = ('status', 'session')
     search_fields = ('student__full_name',)
     date_hierarchy = "enrolled_on"
-    inlines = [AttendanceInline, AssessmentInline]
-    list_per_page = 20
+    list_per_page = 50
+    
+    def optimize_queryset(self, qs):
+        return qs.select_related('student', 'session').prefetch_related('attendances')
     
     def get_student_name(self, obj):
         return obj.student.full_name
     get_student_name.short_description = 'Студент'
     
     def get_session_number(self, obj):
-        return f"Сессия №{obj.session.session_number}"
+        return f"№{obj.session.session_number}"
     get_session_number.short_description = 'Сессия'
     
     def get_attendance_status(self, obj):
@@ -322,7 +300,7 @@ class EnrollmentAdmin(admin.ModelAdmin):
     get_attendance_status.short_description = 'Присутствие'
 
 @admin.register(Attendance)
-class AttendanceAdmin(admin.ModelAdmin):
+class AttendanceAdmin(OptimizedMixin, admin.ModelAdmin):
     """ Класс для отображения в админке модели Attendance """
     list_display = (
         "get_student_name",
@@ -331,27 +309,37 @@ class AttendanceAdmin(admin.ModelAdmin):
     )
     list_filter = ("present", "session")
     search_fields = ("enrollment__student__full_name",)
+    list_per_page = 100
+    
+    def optimize_queryset(self, qs):
+        return qs.select_related('enrollment__student', 'session')
     
     def get_student_name(self, obj):
         return obj.enrollment.student.full_name
     get_student_name.short_description = 'Студент'
     
     def get_session_number(self, obj):
-        return f"Сессия №{obj.session.session_number}"
+        return f"№{obj.session.session_number}"
     get_session_number.short_description = 'Сессия'
 
 @admin.register(AssessmentType)
-class AssessmentTypeAdmin(admin.ModelAdmin):
+class AssessmentTypeAdmin(OptimizedMixin, admin.ModelAdmin):
     """ Класс для отображения в админке модели AssessmentType """
     list_display = ("name", "weight", "get_assessments_count")
     ordering = ("name",)
+    list_per_page = 50
     
     def get_assessments_count(self, obj):
-        return obj.assessments.count()
-    get_assessments_count.short_description = 'Количество оценок'
+        cache_key = f"assessment_type_count_{obj.id}"
+        count = cache.get(cache_key)
+        if count is None:
+            count = obj.assessments.count()
+            cache.set(cache_key, count, 600)
+        return count
+    get_assessments_count.short_description = 'Оценок'
 
 @admin.register(Assessment)
-class AssessmentAdmin(admin.ModelAdmin):
+class AssessmentAdmin(OptimizedMixin, admin.ModelAdmin):
     """ Модель для отображения в админке модели Assessment """
     list_display = (
         "get_student_name",
@@ -360,47 +348,45 @@ class AssessmentAdmin(admin.ModelAdmin):
         "score",
         "date",
         "is_final_grade",
-        "certificate_issued"
     )
-    list_filter = ("course", "type", "date", "is_final_grade")
+    list_filter = ("course", "type", "date", "is_final_grade", "enrollment__student")
     search_fields = ("enrollment__student__full_name", "course__title")
     date_hierarchy = "date"
-    list_per_page = 50
+    list_per_page = 100
+    
+    def optimize_queryset(self, qs):
+        return qs.select_related('enrollment__student', 'course', 'type')
     
     def get_student_name(self, obj):
         return obj.enrollment.student.full_name
     get_student_name.short_description = 'Студент'
 
 @admin.register(Certificate)
-class CertificateAdmin(admin.ModelAdmin):
+class CertificateAdmin(OptimizedMixin, admin.ModelAdmin):
     """ Модель для отображения в админке модели Certificate """
     list_display = (
         "student",
         "course",
         "type",
         "issued_on",
-        "has_assessment",
         "get_assessment_score"
     )
-    list_filter = ("type", "course", "issued_on")
+    list_filter = ("type", "course__session", "issued_on")
     search_fields = ("student__full_name", "course__title")
     date_hierarchy = "issued_on"
-    list_per_page = 50
+    list_per_page = 100
     
-    def has_assessment(self, obj):
-        return obj.assessment is not None
-    has_assessment.boolean = True
-    has_assessment.short_description = 'Есть оценка'
+    def optimize_queryset(self, qs):
+        return qs.select_related('student', 'course__session', 'assessment__type')
     
     def get_assessment_score(self, obj):
         if obj.assessment:
-            grade_type = "Итоговая" if obj.assessment.is_final_grade else obj.assessment.type.name
-            return f"{obj.assessment.score} ({grade_type})"
-        return "Нет"
-    get_assessment_score.short_description = 'Оценка'
+            return f"{obj.assessment.score}"
+        return "—"
+    get_assessment_score.short_description = 'Балл'
 
 @admin.register(Statistic)
-class StatisticAdmin(admin.ModelAdmin):
+class StatisticAdmin(OptimizedMixin, admin.ModelAdmin):
     """ Модель для отображения в админке модели Statistic """
     list_display = (
         "student",
@@ -409,18 +395,20 @@ class StatisticAdmin(admin.ModelAdmin):
         "uncertified",
         "sessions_attended",
         "sessions_missed",
-        "sessions_late",
         "get_completion_percentage"
     )
     search_fields = ("student__full_name",)
     list_filter = ("sessions_attended", "sessions_missed")
     readonly_fields = ("student",)
-    list_per_page = 50
+    list_per_page = 100
+    
+    def optimize_queryset(self, qs):
+        return qs.select_related('student')
     
     def get_completion_percentage(self, obj):
         if obj.total_courses > 0:
             percentage = (obj.certified / obj.total_courses) * 100
             return f"{percentage:.1f}%"
         return "0%"
-    get_completion_percentage.short_description = 'Процент завершения'
+    get_completion_percentage.short_description = '% завершения'
 

@@ -10,7 +10,7 @@ class Session(models.Model):
         verbose_name_plural = "Сессии"
         ordering = ["session_number"]
     
-    session_number = models.PositiveSmallIntegerField("Номер сессии")
+    session_number = models.PositiveSmallIntegerField(verbose_name="Номер сессии")
 
     def __str__(self):
         return f"Сессия №{self.session_number}"
@@ -34,7 +34,9 @@ class Student(models.Model):
                               default=Status.ACTIVE)
 
     def __str__(self):
-        return f"{self.full_name} ({self.email})"
+        if self.email:
+            return f"{self.full_name} ({self.email})"
+        return self.full_name
     
 class Course(models.Model):
     """ Модель для предмета (курса) """
@@ -44,9 +46,9 @@ class Course(models.Model):
         verbose_name_plural = "Предметы"
         ordering = ["title"]
     
-    title = models.CharField("Название предмета", max_length=200)
-    description = models.TextField("Описание предмета", blank=True)
-    session = models.ForeignKey(Session, on_delete=models.CASCADE, related_name="courses")
+    title = models.CharField(max_length=200, verbose_name="Название предмета")
+    description = models.TextField(blank=True, verbose_name="Описание предмета")
+    session = models.ForeignKey(Session, on_delete=models.CASCADE, related_name="courses", verbose_name="Сессия")
 
     def __str__(self):
         return f"Курс: {self.title} (сессия {self.session.session_number})"
@@ -67,12 +69,12 @@ class Enrollment(models.Model):
         IN_PROGRESS = "in_progress", "Учится"
         COMPLETED = "completed", "Закончил"
     
-    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="enrollments")
-    session = models.ForeignKey(Session, on_delete=models.CASCADE, related_name="enrollments")
-    enrolled_on = models.DateField(null=True, default=now)
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="enrollments", verbose_name="Студент")
+    session = models.ForeignKey(Session, on_delete=models.CASCADE, related_name="enrollments", verbose_name="Сессия")
+    enrolled_on = models.DateField(null=True, default=now, verbose_name="Дата зачисления")
     status = models.CharField(choices=Status.choices, 
                               default=Status.PLANNED,
-                              max_length=20)
+                              max_length=20, verbose_name="Статус")
 
     def __str__(self):
         return f"Запись о зачислении для {self.student.full_name} (сессия {self.session.session_number})"
@@ -99,8 +101,8 @@ class AssessmentType(models.Model):
         verbose_name_plural = "Типы зачетов"
         ordering = ["name"]
 
-    name = models.CharField(max_length=100)
-    weight = models.DecimalField("Вес в итоговой оценке (в %)", max_digits=5, decimal_places=2, null=True, blank=True)
+    name = models.CharField(max_length=100, verbose_name="Название")
+    weight = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, verbose_name="Вес в итоговой оценке (%)")
 
     def __str__(self):
         return f"{self.name}"
@@ -116,13 +118,13 @@ class Assessment(models.Model):
         verbose_name_plural = "Оценки"
         ordering = ["-date"]
     
-    enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE, related_name="assessments")
-    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="assessments")
-    type = models.ForeignKey(AssessmentType, on_delete=models.CASCADE, related_name="assessments")
-    score = models.DecimalField(max_digits=100, decimal_places=1)
-    date = models.DateField(null=True, default=now)
-    certificate_issued = models.BooleanField(default=False)
-    is_final_grade = models.BooleanField("Итоговая оценка за предмет", default=False)
+    enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE, related_name="assessments", verbose_name="Зачисление")
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="assessments", verbose_name="Предмет")
+    type = models.ForeignKey(AssessmentType, on_delete=models.CASCADE, related_name="assessments", verbose_name="Тип зачета")
+    score = models.DecimalField(max_digits=100, decimal_places=1, verbose_name="Балл")
+    date = models.DateField(null=True, default=now, verbose_name="Дата")
+    certificate_issued = models.BooleanField(default=False, verbose_name="Сертификат выдан")
+    is_final_grade = models.BooleanField(default=False, verbose_name="Итоговая оценка за предмет")
 
     def __str__(self):
         grade_type = "Итоговая оценка" if self.is_final_grade else f"Оценка по {self.type.name}"
