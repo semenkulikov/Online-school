@@ -63,7 +63,7 @@ class Enrollment(models.Model):
         ]
 
     class Status(models.TextChoices):
-        PLANNED = "planned", "Зачисляется"
+        PLANNED = "planned", "Планируется"
         IN_PROGRESS = "in_progress", "Учится"
         COMPLETED = "completed", "Закончил"
     
@@ -86,7 +86,7 @@ class Attendance(models.Model):
 
     enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE, related_name="attendances")
     session = models.ForeignKey(Session, on_delete=models.CASCADE)
-    present = models.BooleanField()  # Был ли студент на данной сессии
+    present = models.BooleanField("Присутствовал")  # Был ли студент на данной сессии
 
     def __str__(self):
         return f"Посещаемость для {self.enrollment.student.full_name} (сессия №{self.session.session_number})"
@@ -122,14 +122,15 @@ class Assessment(models.Model):
     score = models.DecimalField(max_digits=100, decimal_places=1)
     date = models.DateField(null=True, default=now)
     certificate_issued = models.BooleanField(default=False)
+    is_final_grade = models.BooleanField("Итоговая оценка за предмет", default=False)
 
     def __str__(self):
-        return f"Оценка {self.score} для студента {self.enrollment.student.full_name}"
+        grade_type = "Итоговая оценка" if self.is_final_grade else f"Оценка по {self.type.name}"
+        return f"{grade_type} {self.score} для {self.enrollment.student.full_name} по {self.course.title}"
 
 class Certificate(models.Model):
     """ 
-    Сведения о выдаче свидетельства: 
-    на какую оценку/курс, дата выдачи, файл/номер. 
+    Сведения о выдаче свидетельства по предмету для студента
     """
 
     class Meta:
@@ -139,22 +140,22 @@ class Certificate(models.Model):
 
     class Status(models.TextChoices):
         UNREADY = "unready", "Не выдан"
-
         CONDITIONALLY = "conditionally", "Условно-освидетельствовано (не все выполнено)"
         CONTROL_RECEIVED = "control_received", "Условно-освидетельствовано: поступила контрольная"
-
         IN_PROGRESS = "in_progress", "Готовится"
         COMPLETED = "completed", "Готов в электронной форме"
     
-    assessment = models.OneToOneField(Assessment, on_delete=models.CASCADE, related_name="certificate")
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="certificates")
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="certificates")
+    assessment = models.ForeignKey(Assessment, on_delete=models.CASCADE, related_name="certificates", null=True, blank=True)
     issued_on = models.DateField(null=True, default=now)
     file = models.FileField(upload_to='certificates/', blank=True, null=True)
-    type = models.CharField(choices=Status.choices, 
+    type = models.CharField("Статус", choices=Status.choices, 
                               default=Status.UNREADY,
                               max_length=20)
 
     def __str__(self):
-        return f"Сертификат об окончании курса {self.assessment.course.title}, оценка {self.assessment.score}"
+        return f"Сертификат по {self.course.title} для {self.student.full_name}"
 
 class Statistic(models.Model):
     """ 

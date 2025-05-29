@@ -1,0 +1,83 @@
+/* Улучшения для темной темы Django админки */
+
+/* CSS переменные для темной темы */
+[data-theme="dark"] {
+    --success-bg: #0f2519;
+    --success-fg: #75b798;
+    --success-border: #2d5016;
+    
+    --error-bg: #2c0b0e;
+    --error-fg: #f1aeb5;
+    --error-border: #842029;
+    
+    --warning-bg: #2b2006;
+    --warning-fg: #ffda6a;
+    --warning-border: #664d03;
+    
+    --info-bg: #032830;
+    --info-fg: #6edff6;
+    --info-border: #055160;
+    
+    --border-color: #404040;
+    --body-bg: #2b2b2b;
+    --body-fg: #f8f9fa;
+    --body-quiet-color: #999;
+    --link-fg: #79aec8;
+}
+
+/* Автоматическое определение темной темы */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --success-bg: #0f2519;
+        --success-fg: #75b798;
+        --success-border: #2d5016;
+        
+        --error-bg: #2c0b0e;
+        --error-fg: #f1aeb5;
+        --error-border: #842029;
+        
+        --warning-bg: #2b2006;
+        --warning-fg: #ffda6a;
+        --warning-border: #664d03;
+        
+        --info-bg: #032830;
+        --info-fg: #6edff6;
+        --info-border: #055160;
+        
+        --border-color: #404040;
+        --body-bg: #2b2b2b;
+        --body-fg: #f8f9fa;
+        --body-quiet-color: #999;
+        --link-fg: #79aec8;
+    }
+}
+
+/* Улучшения для статистических блоков */
+.student-statistics {
+    transition: all 0.3s ease;
+}
+
+.student-statistics:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Улучшения для блоков прогресса */
+.session-progress {
+    transition: all 0.3s ease;
+}
+
+.session-progress:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Улучшения для сертификатов */
+.certificate-status {
+    font-weight: 600;
+    text-shadow: none;
+}
+
+/* Адаптация emoji для темной темы */
+[data-theme="dark"] .emoji {
+    filter: brightness(1.2);
+} 
