@@ -55,7 +55,7 @@ class Command(BaseCommand):
                             self.stdout.write(f'Удален файл миграции: {filepath}')
                     
                     # Пересоздаем миграции
-                    call_command('makemigrations', verbosity=0)
+                    call_command('makemigrations', '--merge', '--noinput', verbosity=0)
                     self.stdout.write(self.style.SUCCESS('✅ Конфликт миграций разрешен'))
                     
                 except Exception as fix_error:
