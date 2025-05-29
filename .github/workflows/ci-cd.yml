@@ -128,9 +128,24 @@ jobs:
           script: |
             cd /home/${{ secrets.SERVER_USER }}/online-school
             git pull origin main
+            
+            # Пересоздаем .env файл с новыми переменными
+            cat <<EOF > .env
+            DJANGO_SECRET_KEY=${{ secrets.DJANGO_SECRET_KEY }}
+            DEBUG_MODE=${{ secrets.DEBUG_MODE }}
+            DB_NAME=${{ secrets.DB_NAME }}
+            DB_USER=${{ secrets.DB_USER }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            DB_HOST=${{ secrets.DB_HOST }}
+            DB_PORT=${{ secrets.DB_PORT }}
+            ALLOWED_HOSTS=${{ secrets.ALLOWED_HOSTS }}
+            LANGUAGE_CODE=${{ secrets.LANGUAGE_CODE }}
+            EOF
+            
             docker pull ${{ env.IMAGE }}
             docker compose -f docker-compose.yml -f docker-compose.prod.yml down
             docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
             sleep 10
+            docker compose exec web python manage.py clean_env
             docker compose exec web python manage.py check_env
             docker compose exec web python manage.py init_production

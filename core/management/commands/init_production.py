@@ -72,6 +72,14 @@ class Command(BaseCommand):
             self.stdout.write(self.style.ERROR(f'❌ Ошибка миграций: {e}'))
             return
         
+        # 2.5. Создание таблицы кэша
+        self.stdout.write('\n🗄️ Создание таблицы кэша...')
+        try:
+            call_command('createcachetable', verbosity=0)
+            self.stdout.write(self.style.SUCCESS('✅ Таблица кэша создана'))
+        except Exception as e:
+            self.stdout.write(self.style.WARNING(f'⚠️ Ошибка создания таблицы кэша: {e}'))
+        
         # 3. Сбор статических файлов
         
         self.stdout.write('\n📁 Сбор статических файлов...')
