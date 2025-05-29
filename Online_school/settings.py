@@ -236,21 +236,21 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
 
 # Security settings for production
-if not DEBUG and '*' not in ALLOWED_HOSTS and 'localhost' not in ALLOWED_HOSTS and '127.0.0.1' not in ALLOWED_HOSTS:
-    # HTTPS settings
-    SECURE_SSL_REDIRECT = True
-    SECURE_HSTS_SECONDS = 31536000  # 1 год
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-    SECURE_HSTS_PRELOAD = True
+# if not DEBUG and '*' not in ALLOWED_HOSTS and 'localhost' not in ALLOWED_HOSTS and '127.0.0.1' not in ALLOWED_HOSTS:
+#     # HTTPS settings
+#     SECURE_SSL_REDIRECT = True
+#     SECURE_HSTS_SECONDS = 31536000  # 1 год
+#     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+#     SECURE_HSTS_PRELOAD = True
     
-    # Cookie security
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
-    SESSION_COOKIE_HTTPONLY = True
-    CSRF_COOKIE_HTTPONLY = True
+#     # Cookie security
+#     SESSION_COOKIE_SECURE = True
+#     CSRF_COOKIE_SECURE = True
+#     SESSION_COOKIE_HTTPONLY = True
+#     CSRF_COOKIE_HTTPONLY = True
     
-    # Additional security headers
-    SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
+#     # Additional security headers
+#     SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
 
 # Admin optimizations  
 ADMIN_AUTODISCOVER_TIMEOUT = 30
