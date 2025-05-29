@@ -369,7 +369,7 @@ class Command(BaseCommand):
                         continue
                     
                     # Проверяем посещаемость
-                    presence_value = ws.cell(row=row, column=session['presence_column']).value
+                    presence_value = ws_data.cell(row=row, column=session['presence_column']).value
                     was_present = bool(presence_value)
                     
                     # Для каждого курса в сессии
@@ -393,9 +393,9 @@ class Command(BaseCommand):
                         
                         # Для каждого типа зачета в курсе
                         for assessment_type_info in course.get('assessment_types', []):
-                            score_value = ws.cell(row=row, column=assessment_type_info['column']).value or 0
-                            if isinstance(score_value, (int, float)):
-                                # Создаем запись об оценке
+                            score_value = ws_data.cell(row=row, column=assessment_type_info['column']).value
+                            if score_value is not None and isinstance(score_value, (int, float)):
+                                # Создаем запись об оценке только если есть реальный балл
                                 assessment, _ = Assessment.objects.get_or_create(
                                     enrollment=enrollment,
                                     course=course['obj'],
@@ -407,10 +407,10 @@ class Command(BaseCommand):
                                     }
                                 )
                         
-                        # Если есть колонка с результатом
+                        # Если есть колонка с результатом - создаем итоговую оценку
                         if 'result_column' in course:
-                            result_value = ws.cell(row=row, column=course['result_column']).value or 0
-                            if isinstance(result_value, (int, float)):
+                            result_value = ws_data.cell(row=row, column=course['result_column']).value
+                            if result_value is not None and isinstance(result_value, (int, float)):
                                 # Получаем тип оценки "Результат"
                                 result_type, _ = AssessmentType.objects.get_or_create(name="Результат")
                                 # Создаем или обновляем запись об итоговой оценке
@@ -421,124 +421,46 @@ class Command(BaseCommand):
                                     defaults={
                                         'score': result_value,
                                         'date': now(),
-                                        'certificate_issued': False
+                                        'certificate_issued': False,
+                                        'is_final_grade': True
                                     }
                                 )
                         
-                        # Обрабатываем колонку сертификата независимо от результата
+                        # Обрабатываем сертификат только если есть цветная ячейка
                         if 'certificate_column' in course:
                             cert_cell = ws.cell(row=row, column=course['certificate_column'])
                             cert_value = cert_cell.value
                             
+                            # Создаем сертификат только если есть значение И цвет
                             if cert_value:
                                 cell_color = get_cell_color(cert_cell)
                                 
-                                # Определяем статус свидетельства по цвету ячейки
-                                cert_status = Certificate.Status.UNREADY
                                 if cell_color and cell_color in cert_colors:
                                     cert_status = cert_colors[cell_color]
-                                
-                                # Используем результат если есть, иначе создаем фиктивную оценку
-                                if 'result_column' in course and isinstance(ws.cell(row=row, column=course['result_column']).value, (int, float)):
-                                    # Используем существующую оценку результата
-                                    result_type, _ = AssessmentType.objects.get_or_create(name="Результат")
-                                    target_assessment, _ = Assessment.objects.get_or_create(
-                                        enrollment=enrollment,
+                                    
+                                    # Ищем связанную итоговую оценку
+                                    linked_assessment = None
+                                    if 'result_column' in course:
+                                        result_type, _ = AssessmentType.objects.get_or_create(name="Результат")
+                                        try:
+                                            linked_assessment = Assessment.objects.get(
+                                                enrollment=enrollment,
+                                                course=course['obj'],
+                                                type=result_type
+                                            )
+                                        except Assessment.DoesNotExist:
+                                            pass
+                                    
+                                    # Создаем сертификат
+                                    Certificate.objects.update_or_create(
+                                        student=student,
                                         course=course['obj'],
-                                        type=result_type,
                                         defaults={
-                                            'score': ws.cell(row=row, column=course['result_column']).value,
-                                            'date': now(),
-                                            'certificate_issued': False
+                                            'assessment': linked_assessment,
+                                            'issued_on': now(),
+                                            'type': cert_status
                                         }
                                     )
-                                else:
-                                    # Создаем фиктивную оценку
-                                    general_assessment_type, _ = AssessmentType.objects.get_or_create(name="Общий результат")
-                                    target_assessment, _ = Assessment.objects.get_or_create(
-                                        enrollment=enrollment,
-                                        course=course['obj'],
-                                        type=general_assessment_type,
-                                        defaults={
-                                            'score': 1,  # Фиктивная оценка
-                                            'date': now(),
-                                            'certificate_issued': False
-                                        }
-                                    )
-                                
-                                # Создаем или обновляем запись о свидетельстве
-                                Certificate.objects.update_or_create(
-                                    assessment=target_assessment,
-                                    defaults={
-                                        'issued_on': now(),
-                                        'type': cert_status
-                                    }
-                                )
-                
-                # Обрабатываем независимые колонки сертификатов (не привязанные к конкретным курсам)
-                for cert_col_info in all_certificate_columns:
-                    cert_col = cert_col_info['column']
-                    
-                    # Проверяем, не обработана ли уже эта колонка как часть курса
-                    already_processed = False
-                    for session in sessions_data:
-                        for course in session['courses']:
-                            if 'certificate_column' in course and course['certificate_column'] == cert_col:
-                                already_processed = True
-                                break
-                        if already_processed:
-                            break
-                    
-                    if not already_processed:
-                        cert_cell = ws.cell(row=row, column=cert_col)
-                        cert_value = cert_cell.value
-                        
-                        if cert_value:
-                            cell_color = get_cell_color(cert_cell)
-                            
-                            # Определяем статус свидетельства по цвету ячейки
-                            cert_status = Certificate.Status.UNREADY
-                            if cell_color and cell_color in cert_colors:
-                                cert_status = cert_colors[cell_color]
-                            
-                            # Создаем общий курс для независимых сертификатов
-                            general_course, _ = Course.objects.get_or_create(
-                                title=f"Общий курс (колонка {cert_col})",
-                                session=sessions_data[0]['obj'] if sessions_data else Session.objects.first(),
-                                defaults={'description': f'Независимый сертификат из колонки {cert_col}'}
-                            )
-                            
-                            # Создаем зачисление если его нет
-                            enrollment, _ = Enrollment.objects.get_or_create(
-                                student=student,
-                                session=general_course.session,
-                                defaults={
-                                    'enrolled_on': now(),
-                                    'status': Enrollment.Status.COMPLETED
-                                }
-                            )
-                            
-                            # Создаем фиктивную оценку для сертификата
-                            general_assessment_type, _ = AssessmentType.objects.get_or_create(name="Общий результат")
-                            target_assessment, _ = Assessment.objects.get_or_create(
-                                enrollment=enrollment,
-                                course=general_course,
-                                type=general_assessment_type,
-                                defaults={
-                                    'score': 1,  # Фиктивная оценка
-                                    'date': now(),
-                                    'certificate_issued': False
-                                }
-                            )
-                            
-                            # Создаем или обновляем запись о свидетельстве
-                            Certificate.objects.update_or_create(
-                                assessment=target_assessment,
-                                defaults={
-                                    'issued_on': now(),
-                                    'type': cert_status
-                                }
-                            )
                 
                 # 5. Расчет и импорт статистики для студента
                 self.stdout.write(f"Расчет статистики для студента {student.full_name}")
