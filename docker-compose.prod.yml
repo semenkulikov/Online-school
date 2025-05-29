@@ -3,7 +3,7 @@ services:
     image: "${IMAGE}"
     build: false
     volumes: []
-    command: gunicorn Online_school.wsgi:application --bind 0.0.0.0:8000
+    command: gunicorn Online_school.wsgi:application --bind 0.0.0.0:8000 --log-level debug --access-logfile - --error-logfile - --timeout 120 --preload
     ports:
       - "8000:8000"
     environment:
@@ -16,6 +16,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS}
       LANGUAGE_CODE: ${LANGUAGE_CODE}
+      PYTHONUNBUFFERED: 1
     depends_on:
       - db
 
