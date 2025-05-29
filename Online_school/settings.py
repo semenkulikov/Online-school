@@ -55,9 +55,9 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'core.middleware.PerformanceMiddleware',  # Мониторинг производительности
-    'core.middleware.LogIPMiddleware',        # Логирование IP
-    'core.middleware.SecurityHeadersMiddleware',  # Заголовки безопасности
+    # 'core.middleware.PerformanceMiddleware',  # Мониторинг производительности
+    # 'core.middleware.LogIPMiddleware',        # Логирование IP
+    #'core.middleware.SecurityHeadersMiddleware',  # Заголовки безопасности
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
