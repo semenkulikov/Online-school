@@ -236,7 +236,7 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
 
 # Security settings for production
-if not DEBUG and 'localhost' not in ALLOWED_HOSTS and '127.0.0.1' not in ALLOWED_HOSTS:
+if not DEBUG and '*' not in ALLOWED_HOSTS and 'localhost' not in ALLOWED_HOSTS and '127.0.0.1' not in ALLOWED_HOSTS:
     # HTTPS settings
     SECURE_SSL_REDIRECT = True
     SECURE_HSTS_SECONDS = 31536000  # 1 год
