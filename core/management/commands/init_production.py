@@ -37,7 +37,7 @@ class Command(BaseCommand):
             if 'Conflicting migrations detected' in error_msg:
                 self.stdout.write(self.style.WARNING('⚠️ Обнаружен конфликт миграций, выполняю merge...'))
                 try:
-                    call_command('makemigrations', '--merge', verbosity=0)
+                    call_command('makemigrations', '--merge', '--noinput', verbosity=0)
                     self.stdout.write(self.style.SUCCESS('✅ Конфликт миграций разрешен'))
                 except Exception as merge_error:
                     self.stdout.write(self.style.ERROR(f'❌ Ошибка merge миграций: {merge_error}'))
