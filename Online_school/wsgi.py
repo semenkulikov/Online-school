@@ -33,6 +33,35 @@ try:
     from django.core.wsgi import get_wsgi_application
     
     logger.info("WSGI: Getting WSGI application...")
+    
+    # Проверяем настройки Django перед инициализацией
+    import django
+    from django.conf import settings
+    
+    logger.info("WSGI: Testing Django configuration...")
+    logger.info(f"WSGI: SECRET_KEY exists: {bool(settings.SECRET_KEY)}")
+    logger.info(f"WSGI: DEBUG mode: {settings.DEBUG}")
+    logger.info(f"WSGI: Database engine: {settings.DATABASES['default']['ENGINE']}")
+    
+    logger.info("WSGI: Testing database connection...")
+    from django.db import connection
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+        logger.info("WSGI: Database connection OK")
+    except Exception as db_e:
+        logger.error(f"WSGI: Database connection failed: {db_e}")
+    
+    logger.info("WSGI: Testing cache...")
+    from django.core.cache import cache
+    try:
+        cache.set('wsgi_test', 'ok', 10)
+        result = cache.get('wsgi_test')
+        logger.info(f"WSGI: Cache test result: {result}")
+    except Exception as cache_e:
+        logger.error(f"WSGI: Cache test failed: {cache_e}")
+    
+    logger.info("WSGI: Creating Django application...")
     application = get_wsgi_application()
     
     logger.info("WSGI: Successfully initialized Django application")
