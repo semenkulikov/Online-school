@@ -4,6 +4,7 @@ from django.core.cache import cache
 from django.db import connection
 from django.conf import settings
 import time
+import os
 
 class Command(BaseCommand):
     help = "Инициализация системы для продакшена: оптимизация БД, прогрев кэша, настройка"
@@ -35,12 +36,30 @@ class Command(BaseCommand):
         except Exception as e:
             error_msg = str(e)
             if 'Conflicting migrations detected' in error_msg:
-                self.stdout.write(self.style.WARNING('⚠️ Обнаружен конфликт миграций, выполняю merge...'))
+                self.stdout.write(self.style.WARNING('⚠️ Обнаружен конфликт миграций, применяю исправление...'))
                 try:
-                    call_command('makemigrations', '--merge', '--noinput', verbosity=0)
+                    # Находим конфликтующие миграции и удаляем самые новые
+                    migrations_dir = os.path.join(settings.BASE_DIR, 'core', 'migrations')
+                    conflicting_files = []
+                    
+                    # Ищем файлы миграций 0008 и 0011
+                    for filename in os.listdir(migrations_dir):
+                        if filename.startswith('0008_') or filename.startswith('0011_'):
+                            if filename.endswith('.py'):
+                                conflicting_files.append(os.path.join(migrations_dir, filename))
+                    
+                    # Удаляем конфликтующие файлы
+                    for filepath in conflicting_files:
+                        if os.path.exists(filepath):
+                            os.remove(filepath)
+                            self.stdout.write(f'Удален файл миграции: {filepath}')
+                    
+                    # Пересоздаем миграции
+                    call_command('makemigrations', verbosity=0)
                     self.stdout.write(self.style.SUCCESS('✅ Конфликт миграций разрешен'))
-                except Exception as merge_error:
-                    self.stdout.write(self.style.ERROR(f'❌ Ошибка merge миграций: {merge_error}'))
+                    
+                except Exception as fix_error:
+                    self.stdout.write(self.style.ERROR(f'❌ Ошибка исправления миграций: {fix_error}'))
             else:
                 self.stdout.write(self.style.WARNING(f'⚠️ Нет новых миграций: {e}'))
         
