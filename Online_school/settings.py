@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 from dotenv import find_dotenv, load_dotenv
 import logging
+import sys
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -64,8 +65,11 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-# Добавляем debug toolbar только в DEBUG режиме
-if DEBUG:
+# Определяем режим тестирования
+TESTING = 'test' in sys.argv
+
+# Добавляем debug toolbar только в DEBUG режиме и НЕ при тестировании
+if DEBUG and not TESTING:
     INSTALLED_APPS += ['debug_toolbar']
     MIDDLEWARE.insert(1, 'debug_toolbar.middleware.DebugToolbarMiddleware')
     
@@ -73,6 +77,7 @@ if DEBUG:
     DEBUG_TOOLBAR_CONFIG = {
         'SHOW_TOOLBAR_CALLBACK': lambda request: True,  # Всегда показывать
         'SHOW_COLLAPSED': True,
+        'IS_RUNNING_TESTS': False,  # Явно указываем что это не тесты
     }
     
     # Панели Debug Toolbar
