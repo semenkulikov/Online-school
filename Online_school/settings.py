@@ -135,8 +135,8 @@ DATABASES = {
         'PASSWORD': os.getenv('DB_PASSWORD'),
         'HOST': os.getenv('DB_HOST'),
         'PORT': os.getenv('DB_PORT'),
-        'CONN_MAX_AGE': 60,  # Переиспользование соединений
-        'CONN_HEALTH_CHECKS': True,  # Проверка соединений для Django 4.1+
+        'CONN_MAX_AGE': 0,  # Отключаем persistent connections для gevent
+        'CONN_HEALTH_CHECKS': False,  # Отключаем health checks для gevent
     }
 }
 

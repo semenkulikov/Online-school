@@ -34,6 +34,7 @@ services:
       LANGUAGE_CODE: ${LANGUAGE_CODE}
       PYTHONUNBUFFERED: 1
       FORWARDED_ALLOW_IPS: "*"
+      GEVENT_SUPPORT: "True"
     depends_on:
       - db
 
