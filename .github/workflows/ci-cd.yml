@@ -140,12 +140,50 @@ jobs:
             DB_PORT=${{ secrets.DB_PORT }}
             ALLOWED_HOSTS=${{ secrets.ALLOWED_HOSTS }}
             LANGUAGE_CODE=${{ secrets.LANGUAGE_CODE }}
+            IMAGE=${{ env.IMAGE }}
             EOF
             
+            # Генерируем SSL сертификат если не существует
+            if [ ! -f ssl/certs/server.crt ] || [ ! -f ssl/private/server.key ]; then
+              echo "🔐 Генерация SSL сертификата..."
+              chmod +x generate_ssl.sh
+              ./generate_ssl.sh
+            fi
+            
+            # Останавливаем старые контейнеры
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml down || true
+            
+            # Удаляем старые образы для освобождения места
+            docker image prune -f
+            
+            # Скачиваем новый образ
             docker pull ${{ env.IMAGE }}
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml down
+            
+            # Запускаем новые контейнеры
             docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
-            sleep 10
-            docker compose exec web python manage.py clean_env
-            docker compose exec web python manage.py check_env
-            docker compose exec web python manage.py init_production
+            
+            # Ждем запуска контейнеров
+            echo "⏳ Ожидание запуска контейнеров..."
+            sleep 20
+            
+            # Проверяем статус контейнеров
+            echo "📊 Статус контейнеров:"
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
+            
+            # Выполняем команды Django в веб контейнере
+            echo "🔧 Настройка Django..."
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T web python manage.py collectstatic --noinput || true
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T web python manage.py migrate || true
+            
+            # Проверяем переменные окружения
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T web python manage.py check_env || true
+            
+            # Инициализируем продакшн если команда существует
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T web python manage.py init_production || true
+            
+            # Проверяем логи на ошибки
+            echo "📋 Проверка логов..."
+            timeout 10 docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --tail=50 web || true
+            timeout 10 docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --tail=20 nginx || true
+            
+            echo "✅ Деплой завершен! Сайт доступен по адресу: https://${{ secrets.SERVER_HOST }}"

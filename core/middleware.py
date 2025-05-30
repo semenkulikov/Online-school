@@ -3,6 +3,8 @@ import logging
 from django.conf import settings
 from django.db import connection
 from django.core.cache import cache
+from django.http import HttpResponseBadRequest
+from django.utils.deprecation import MiddlewareMixin
 
 logger = logging.getLogger('core')
 
@@ -47,27 +49,52 @@ class PerformanceMiddleware:
 
 
 class LogIPMiddleware:
-    """Мидлвар для логирования IP адресов"""
+    """Мидлвар для логирования IP адресов запросов"""
     
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
-        # Получаем IP адрес
+        # Получаем реальный IP
         x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
         if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0]
+            ip = x_forwarded_for.split(',')[0].strip()
         else:
             ip = request.META.get('REMOTE_ADDR')
         
-        # Кэшируем информацию о IP на 1 час
-        cache_key = f"ip_logged_{ip}"
-        if not cache.get(cache_key):
-            logger.info(f"Request from IP: {ip} to {request.path}")
-            cache.set(cache_key, True, 3600)
+        # Логируем запрос
+        logger.info(f"Request from IP: {ip} to {request.path}")
         
         response = self.get_response(request)
         return response
+
+
+class InvalidRequestFilterMiddleware:
+    """Мидлвар для фильтрации невалидных запросов"""
+    
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        # Проверяем на бинарные/SSL данные в URI
+        raw_uri = request.META.get('RAW_URI', '')
+        if any(ord(char) > 127 or ord(char) < 32 for char in raw_uri if char != '\n' and char != '\r'):
+            logger.warning(f"Binary data in URI from {self.get_client_ip(request)}: {repr(raw_uri[:100])}")
+            return HttpResponseBadRequest("Invalid request")
+        
+        # Проверяем user agent на подозрительные запросы
+        user_agent = request.META.get('HTTP_USER_AGENT', '')
+        if not user_agent or len(user_agent) > 512:
+            logger.warning(f"Suspicious user agent from {self.get_client_ip(request)}: {repr(user_agent[:100])}")
+            return HttpResponseBadRequest("Invalid request")
+        
+        return self.get_response(request)
+    
+    def get_client_ip(self, request):
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            return x_forwarded_for.split(',')[0].strip()
+        return request.META.get('REMOTE_ADDR')
 
 
 class SecurityHeadersMiddleware:

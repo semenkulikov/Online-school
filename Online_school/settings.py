@@ -55,6 +55,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'core.middleware.InvalidRequestFilterMiddleware',  # Фильтрация невалидных запросов
     'core.middleware.PerformanceMiddleware',  # Мониторинг производительности
     'core.middleware.LogIPMiddleware',        # Логирование IP
     'core.middleware.SecurityHeadersMiddleware',  # Заголовки безопасности
@@ -234,6 +235,11 @@ SESSION_COOKIE_AGE = 3600  # 1 час
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
+
+# Настройки для работы за прокси
+USE_X_FORWARDED_HOST = True
+USE_X_FORWARDED_PORT = True
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # Security settings for production
 # if not DEBUG and '*' not in ALLOWED_HOSTS and 'localhost' not in ALLOWED_HOSTS and '127.0.0.1' not in ALLOWED_HOSTS:
