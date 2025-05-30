@@ -34,11 +34,12 @@ urlpatterns += [
 handler404 = 'Online_school.views.handler404'
 handler500 = 'Online_school.views.handler500'
 
+# Добавляем статические файлы всегда (nginx будет обрабатывать их напрямую в production)
+urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
 if settings.DEBUG:
-    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-    
-    # Debug Toolbar URLs
+    # Debug Toolbar URLs только в DEBUG режиме
     import debug_toolbar
     urlpatterns = [
         path('__debug__/', include(debug_toolbar.urls)),
