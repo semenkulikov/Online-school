@@ -18,7 +18,7 @@ services:
     image: "${IMAGE}"
     build: false
     volumes: []
-    command: gunicorn Online_school.wsgi:application --bind 0.0.0.0:8000 --workers 4 --worker-class gevent --worker-connections 1000 --timeout 120 --keepalive 10 --max-requests 1000 --max-requests-jitter 100 --preload --access-logfile - --error-logfile - --log-level info
+    command: gunicorn Online_school.wsgi:application --bind 0.0.0.0:8000 --workers 4 --worker-class gevent --worker-connections 1000 --timeout 120 --max-requests 1000 --max-requests-jitter 100 --preload --access-logfile - --error-logfile - --log-level info
     expose:
       - "8000"
     environment:
