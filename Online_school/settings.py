@@ -41,6 +41,7 @@ ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
 # Application definition
 
 INSTALLED_APPS = [
+    'whitenoise.runserver_nostatic',  # WhiteNoise для runserver
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -53,6 +54,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # WhiteNoise для статики
     'django.contrib.sessions.middleware.SessionMiddleware',
     'core.middleware.InvalidRequestFilterMiddleware',  # Фильтрация невалидных запросов
     'core.middleware.PerformanceMiddleware',  # Мониторинг производительности
@@ -277,7 +279,16 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
+
+# Для Django 5.2+ правильнее явно прописывать STORAGES
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+}
 
 # Media files  
 MEDIA_URL = '/media/'
