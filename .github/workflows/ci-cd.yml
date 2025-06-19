@@ -129,7 +129,7 @@ jobs:
             cd /home/${{ secrets.SERVER_USER }}/online-school
             git pull origin main
             
-            # Пересоздаем .env файл с новыми переменными
+            # Пересоздаём .env файл с новыми переменными
             cat <<EOF > .env
             DJANGO_SECRET_KEY=${{ secrets.DJANGO_SECRET_KEY }}
             DEBUG_MODE=${{ secrets.DEBUG_MODE }}
@@ -150,8 +150,8 @@ jobs:
               ./generate_ssl.sh
             fi
             
-            # Останавливаем старые контейнеры
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml down || true
+            # Останавливаем и удаляем старые контейнеры и volume
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml down -v || true
             
             # Удаляем старые образы для освобождения места
             docker image prune -f
@@ -162,7 +162,7 @@ jobs:
             # Запускаем новые контейнеры
             docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
             
-            # Ждем запуска контейнеров
+            # Ждём запуска контейнеров
             echo "⏳ Ожидание запуска контейнеров..."
             sleep 20
             
