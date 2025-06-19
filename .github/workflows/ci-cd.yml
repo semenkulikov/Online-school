@@ -150,8 +150,8 @@ jobs:
               ./generate_ssl.sh
             fi
             
-            # Останавливаем и удаляем старые контейнеры и volume
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml down -v || true
+            # Останавливаем и удаляем только контейнеры (volume НЕ трогаем)
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml down || true
             
             # Удаляем старые образы для освобождения места
             docker image prune -f
