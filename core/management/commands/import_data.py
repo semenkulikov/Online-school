@@ -66,7 +66,7 @@ class Command(BaseCommand):
             color_code = get_cell_color(cell)
             if color_code:
                 self.stdout.write(f"Легенда: '{description}' имеет цвет {color_code}")
-            else:
+                else:
                 self.stdout.write(f"Легенда: '{description}' - цвет не найден")
         
         # Список слов, которые указывают, что строка не содержит данных о студенте

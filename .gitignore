@@ -6,6 +6,7 @@ __pycache__/
 # C extensions
 *.so
 staticfiles/
+pg_backups/
 .cursor/
 # Distribution / packaging
 .Python
